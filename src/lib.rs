@@ -3,6 +3,8 @@ use std::error::Error;
 use regex::{Regex, RegexBuilder};
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::{BufReader, BufRead};
 
 type MyResult<T> = Result<T, Box<dyn Error>>;
 
@@ -11,6 +13,12 @@ pub struct Config {
     sources: Vec<String>,
     pattern: Option<Regex>,
     seed: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct Fortune {
+    source: String,
+    text: String,
 }
 
 pub fn get_args() -> MyResult<Config> {
@@ -73,7 +81,6 @@ pub fn run(config: Config) -> MyResult<()> {
 }
 
 fn parse_u64(val: &str) -> MyResult<u64> {
-
     val.parse().map_err(|_| format!("\"{}\" not a valid integer", val).into())
 }
 
@@ -114,9 +121,35 @@ fn find_files(paths: &[String]) -> MyResult<Vec<PathBuf>> {
     let set:HashSet<_> = files.iter().cloned().collect();
     files = set.into_iter().collect();
     files.sort();
+    // if vector is sorted we can also use files.dedup() which removes consecutive repated elements
     Ok(files)
 }
 
+fn read_fortunes(paths: &[PathBuf]) -> MyResult<Vec<Fortune>> {
+
+    let mut fortunes = Vec::new();
+    for path in paths {
+
+        let mut file = BufReader::new(File::open(path)?);
+        let mut buffer = Vec::new();
+        let mut num_bytes = 0;
+        loop {
+            num_bytes = file.read_until(b'%', &mut buffer)?;
+            if num_bytes == 0 {
+                break;
+            }
+            fortunes.push(
+                Fortune {
+                    source: path.display().to_string(),
+                    text: String::from_utf8(buffer.clone()).unwrap(),
+                }
+            );
+
+        }
+    }
+    Ok(fortunes)
+    
+}
 #[cfg(test)]
 mod tests {
     use super::{
